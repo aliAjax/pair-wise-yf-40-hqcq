@@ -26,11 +26,11 @@ class DomainService:
                 entity = self.repository.get_entity(existing)
                 if entity:
                     return entity
-        self.rules.validate_create(actor, kind, payload, self._lookup)
+        payload = self.rules.validate_create(actor, kind, payload, self._lookup)
         entity_id = str(payload.pop("id", "") or uuid4())
         if self.repository.get_entity(entity_id):
             raise ConflictError("entity already exists: " + entity_id)
-        status = self.rules.initial_status(kind)
+        status = self.rules.create_status(actor, kind, payload, self._lookup)
         entity = self.repository.create_entity(entity_id, kind, status, payload, actor.user_id)
         self.audit.record(entity_id, actor, "create", None, status, {"kind": kind})
         if idempotency_key:

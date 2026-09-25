@@ -32,11 +32,16 @@ class WorkflowTest(unittest.TestCase):
 
     def test_full_workflow(self):
         created = {}
-        steps = [{'op': 'create', 'as': 'consignment', 'kind': 'consignment', 'data': {'code': 'C-1', 'origin': 'Port-A', 'destination': 'Farm-B'}}, {'op': 'transition', 'target': 'consignment', 'action': 'inspect', 'data': {'inspector': 'I-1', 'inspection_result': 'suspected'}, 'expect': 'inspected'}, {'op': 'transition', 'target': 'consignment', 'action': 'quarantine', 'data': {'pest_found': True, 'sample_id': 'S-1'}, 'expect': 'quarantined'}, {'op': 'transition', 'target': 'consignment', 'action': 'destroy', 'data': {'method': 'incineration', 'witnessed_by': 'W-1'}, 'expect': 'destroyed'}, {'op': 'create', 'as': 'facility', 'kind': 'facility', 'data': {'name': 'Farm-B', 'address': 'County 1'}}, {'op': 'transition', 'target': 'facility', 'action': 'trace', 'data': {'consignment_ids': ['{consignment}']}, 'expect': 'traced'}]
+        actors = {
+            "lab_a": Actor("lab-a", "lab"),
+            "lab_b": Actor("lab-b", "lab"),
+        }
+        steps = [{'op': 'create', 'as': 'consignment', 'kind': 'consignment', 'data': {'code': 'C-1', 'origin': 'Port-A', 'destination': 'Farm-B'}}, {'op': 'transition', 'target': 'consignment', 'action': 'inspect', 'data': {'inspector': 'I-1', 'inspection_result': 'suspected'}, 'expect': 'inspected'}, {'op': 'transition', 'target': 'consignment', 'action': 'quarantine', 'data': {'pest_found': True, 'sample_id': 'S-1'}, 'expect': 'quarantined'}, {'op': 'create', 'as': 'report', 'kind': 'lab_report', 'actor': 'lab_a', 'data': {'consignment_id': '{consignment}', 'sample_id': 'S-1', 'result': 'positive'}, 'expect': 'submitted'}, {'op': 'transition', 'target': 'report', 'action': 'review', 'actor': 'lab_b', 'data': {}, 'expect': 'reviewed'}, {'op': 'transition', 'target': 'consignment', 'action': 'destroy', 'data': {'method': 'incineration', 'witnessed_by': 'W-1'}, 'expect': 'destroyed'}, {'op': 'create', 'as': 'facility', 'kind': 'facility', 'data': {'name': 'Farm-B', 'address': 'County 1'}}, {'op': 'transition', 'target': 'facility', 'action': 'trace', 'data': {'consignment_ids': ['{consignment}']}, 'expect': 'traced'}]
         for step in steps:
+            actor = actors.get(step.get("actor"), self.actor)
             if step["op"] == "create":
                 entity = self.service.create(
-                    self.actor,
+                    actor,
                     step["kind"],
                     _resolve(step.get("data", {}), created),
                     step.get("idempotency_key"),
@@ -44,7 +49,7 @@ class WorkflowTest(unittest.TestCase):
                 created[step["as"]] = entity["id"]
             else:
                 entity = self.service.transition(
-                    self.actor,
+                    actor,
                     created[step["target"]],
                     step["action"],
                     _resolve(step.get("data", {}), created),

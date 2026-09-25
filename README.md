@@ -11,7 +11,7 @@
 - `src/service.py`：用例编排、幂等处理、版本控制和审计写入。
 - `src/http_api.py`：HTTP路由、请求解析和统一错误响应。
 - `src/audit.py`：实体操作审计时间线。
-- `static/index.html`：最小演示页面。
+- `static/index.html`：实验室结论台演示页面。
 - `tests/`：完整流程、规则和失败场景测试。
 
 ## 初始化与启动
@@ -25,6 +25,16 @@ python3 app.py --db ./data.db --port 8306
 ## 核心对象
 
 - `consignment`：检疫批次；`facility`：温室、苗圃或下游种植点。
+- `lab_report`：实验室结论，按批次登记样本编号、检测人和检测结果。
+
+## 实验室结论台
+
+- 创建`lab_report`需批次处于`inspected`或`quarantined`状态，必填`consignment_id`、`sample_id`、`result`（`positive`/`negative`）；检测人自动记录为提交人。
+- 提交后状态为`submitted`，须由另一名实验员（`lab`角色）执行`review`，生效后为`reviewed`。
+- 同批次样本编号重复、或复核人与检测人为同一人时，记录转为`returned`并写入`return_reason`；可用`amend`修改结果或编号、`resubmit`重新提交。
+- `release`要求该批次存在`reviewed`且结果为`negative`的结论；`destroy`要求`reviewed`且结果为`positive`的结论，结论编号会写入批次数据作为依据。
+- 复核生效后再用`amend`修改检测结果，原复核失效（状态回到`submitted`，需重新复核后才能放行或销毁）。
+- 每次提交、退回、复核、修改都写入`data.history`和审计日志，首页（实验室结论台）可查看。
 
 ## 主要接口
 
