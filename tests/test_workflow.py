@@ -32,11 +32,14 @@ class WorkflowTest(unittest.TestCase):
 
     def test_full_workflow(self):
         created = {}
-        steps = [{'op': 'create', 'as': 'consignment', 'kind': 'consignment', 'data': {'code': 'C-1', 'origin': 'Port-A', 'destination': 'Farm-B'}}, {'op': 'transition', 'target': 'consignment', 'action': 'inspect', 'data': {'inspector': 'I-1', 'inspection_result': 'suspected'}, 'expect': 'inspected'}, {'op': 'transition', 'target': 'consignment', 'action': 'quarantine', 'data': {'pest_found': True, 'sample_id': 'S-1'}, 'expect': 'quarantined'}, {'op': 'transition', 'target': 'consignment', 'action': 'destroy', 'data': {'method': 'incineration', 'witnessed_by': 'W-1'}, 'expect': 'destroyed'}, {'op': 'create', 'as': 'facility', 'kind': 'facility', 'data': {'name': 'Farm-B', 'address': 'County 1'}}, {'op': 'transition', 'target': 'facility', 'action': 'trace', 'data': {'consignment_ids': ['{consignment}']}, 'expect': 'traced'}]
+        steps = [{'op': 'create', 'as': 'consignment', 'kind': 'consignment', 'data': {'code': 'C-1', 'origin': 'Port-A', 'destination': 'Farm-B'}}, {'op': 'transition', 'target': 'consignment', 'action': 'inspect', 'data': {'inspector': 'I-1', 'inspection_result': 'suspected'}, 'expect': 'inspected'}, {'op': 'transition', 'target': 'consignment', 'action': 'quarantine', 'data': {'pest_found': True, 'sample_id': 'S-1'}, 'expect': 'quarantined'}, {'op': 'create', 'as': 'conclusion', 'kind': 'lab_conclusion', 'data': {'consignment_id': '{consignment}', 'sample_id': 'S-1A', 'tester': 'LAB-1', 'result': 'positive'}}, {'op': 'transition', 'target': 'conclusion', 'action': 'review', 'as_actor': ('LAB-2', 'lab'), 'expect': 'approved'}, {'op': 'transition', 'target': 'consignment', 'action': 'destroy', 'data': {'method': 'incineration', 'witnessed_by': 'W-1'}, 'expect': 'destroyed'}, {'op': 'create', 'as': 'facility', 'kind': 'facility', 'data': {'name': 'Farm-B', 'address': 'County 1'}}, {'op': 'transition', 'target': 'facility', 'action': 'trace', 'data': {'consignment_ids': ['{consignment}']}, 'expect': 'traced'}]
         for step in steps:
+            actor = self.actor
+            if step.get("as_actor"):
+                actor = Actor(step["as_actor"][0], step["as_actor"][1])
             if step["op"] == "create":
                 entity = self.service.create(
-                    self.actor,
+                    actor,
                     step["kind"],
                     _resolve(step.get("data", {}), created),
                     step.get("idempotency_key"),
@@ -44,7 +47,7 @@ class WorkflowTest(unittest.TestCase):
                 created[step["as"]] = entity["id"]
             else:
                 entity = self.service.transition(
-                    self.actor,
+                    actor,
                     created[step["target"]],
                     step["action"],
                     _resolve(step.get("data", {}), created),
@@ -52,6 +55,9 @@ class WorkflowTest(unittest.TestCase):
                 )
             if "expect" in step:
                 self.assertEqual(entity["status"], step["expect"])
+        destroyed = self.service.get(created["consignment"])
+        self.assertEqual(destroyed["data"]["basis_conclusion_id"], created["conclusion"])
+        self.assertEqual(destroyed["data"]["basis_result"], "positive")
 
 
 if __name__ == "__main__":
